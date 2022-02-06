@@ -1,3 +1,4 @@
+import os
 import subprocess
 import cv2
 import time
@@ -11,16 +12,22 @@ from pages.google_api_handler import speech_to_text, translate_text, text_to_spe
 
 
 temp_input_video_path = "temp.mp4"
-temp_audio_path = "google.wav"
+# temp_audio_path = "google.wav"
 temp_output_video_path = "temp_output.mp4"
 chunk_duration = 5
 
-def process_audio(audio):
+def process_audio(src_audio, tgt_audio):
     temp_target_path = "asdf.wav"
-    audio.write_audiofile(temp_target_path)    
-    popen = subprocess.Popen(f"python3 audio_handler/FragmentVC/convert.py -w audio_handler/wav2vec_small.pt -v audio_handler/vocoder.pt -c audio_handler/fragmentvc.pt {temp_audio_path} {temp_target_path} -o output.wav", shell=True)
-    popen.wait()
-    return mp.AudioFileClip("output.wav")
+    tgt_audio.write_audiofile(temp_target_path)
+
+    # popen = subprocess.Popen(f"python3 audio_handler/FragmentVC/convert.py -w audio_handler/wav2vec_small.pt -v audio_handler/vocoder.pt -c audio_handler/fragmentvc.pt --sample_rate 44100 {src_audio} {temp_target_path} -o output.wav", shell=True)
+    # # popen = subprocess.Popen(f"python3 audio_handler/FragmentVC/convert.py -w audio_handler/wav2vec_small.pt -v audio_handler/vocoder.pt -c audio_handler/fragmentvc.pt {src_audio} {temp_target_path}", shell=True)
+    # popen.wait()
+
+    os.system(f"python3 audio_handler/FragmentVC/convert.py -w audio_handler/wav2vec_small.pt -v audio_handler/vocoder.pt -c audio_handler/fragmentvc.pt {src_audio} {temp_target_path}")
+    time.sleep(120)
+
+    return AudioFileClip("output.wav")
 
 
 def split_text(text):
@@ -54,12 +61,14 @@ def app():
             enc = fd.read()
 
         text = speech_to_text(enc)
-        splitted_texts = split_text(text)
-        print(splitted_texts)
-        splitted_texts = [translate_text(splitted_text) for splitted_text in splitted_texts]
-        eng_voice_paths = [text_to_speech(splitted_text) for splitted_text in splitted_texts]
-        new_audio = [process_audio(mp.AudioFileClip(eng_voice_path)) for eng_voice_path in eng_voice_paths]
+        
+        transcript = text.results[0].alternatives[0].transcript
+        splitted_texts = split_text(transcript)
+        splitted_texts = [translate_text("en", splitted_text) for splitted_text in splitted_texts]
+        eng_voice_paths = [text_to_speech(idx,splitted_text) for idx,splitted_text in enumerate(splitted_texts)]
+        new_audio = [process_audio(AudioFileClip(eng_voice_path),temp_clip.audio) for eng_voice_path in eng_voice_paths]
 
+        # new_audio = process_audio(AudioFileClip(eng_voice_paths[0]),temp_clip.audio)
         # video_split_interval = temp_clip.duration // len(splitted_texts)
 
         # start_sec = 0
